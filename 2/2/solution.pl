@@ -33,7 +33,7 @@ my %pad = (
 	'4,2' => 9,
 );
 
-my @pos = (2,2);
+my @pos = (0,2);
 
 while (<>) {
 	chomp;
