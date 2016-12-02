@@ -32,6 +32,14 @@ my %idx = (
 	'W' => 0,
 );
 
+
+my %sign = (
+	'N' => 1,
+	'E' => 1,
+	'S' => -1,
+	'W' => -1,
+);
+
 my @segments;
 
 my @pos = (0,0);
@@ -56,80 +64,34 @@ for my $move (@movements) {
 
 	my $start = join($posSeparator, @pos);
 
-	if ($facing =~ /\A[SW]\z/) {
-		$amount = -$amount;
-	}
-
-	$pos[$idx{$facing}] += $amount;
+	$pos[$idx{$facing}] += $sign{$facing} * $amount;
 
 	my $end = join($posSeparator, @pos);
 
 	push @segments, join('', $start, $segmentSeparator, $end);
 }
 
+my @allPoints = map { @{generatePoints(split /$segmentSeparator/)} } @segments;
 
-# find intersection of lines
-for my $i (0 .. $#segments) {
-	for my $j (0 .. $i - 1) {
-		my $intersection = intersection($segments[$i], $segments[$j]);
+push @allPoints, (split /$segmentSeparator/, $segments[-1])[1];
 
-		if (defined $intersection) {
-			print sum(map {abs} split /$posSeparator/, $intersection);
+my %visited;
 
-			print "\n";
+my $firstTwice;
 
-			exit 0;
-		}
-	}
-}
+for my $point (@allPoints) {
+	if (defined $visited{$point}) {
+		$firstTwice = $point;
 
-exit 1;
-
-# determine intersection of 2 line segments
-# shortcuts for horizontal/vertical lines
-sub intersection {
-	my ($l1, $l2) = @_;
-
-
-#	print "finding intersection between segments $l1 and $l2\n";
-
-	my ($s1, $e1) = split /$segmentSeparator/, $l1;
-	my ($s2, $e2) = split /$segmentSeparator/, $l2;
-
-
-#	print "l1s:$s1 l1e:$e1, l2s:$s2 l2e:$e2\n";
-
-	my $points1 = generatePoints($s1, $e1);
-	my $points2 = generatePoints($s2, $e2);
-
-	for my $p1 (@$points1) {
-		for my $p2 (@$points2) {
-			if ($p1 eq $p2) {
-				return $p1;
-			}
-		}
+		last;
 	}
 
-	return;
+	$visited{$point} = 1;
 }
 
-sub horizontalEh {
-	my ($start, $end) = @_;
+print sum(map {abs} split /$posSeparator/, $firstTwice);
 
-	my ($sx, $sy) = split /$posSeparator/, $start;
-	my ($ex, $ey) = split /$posSeparator/, $end;
-
-	return ($sy == $ey);
-}
-
-sub verticalEh {
-	my ($start, $end) = @_;
-
-	my ($sx, $sy) = split /$posSeparator/, $start;
-	my ($ex, $ey) = split /$posSeparator/, $end;
-
-	return ($sx == $ex);
-}
+print "\n";
 
 # generate all integer points on a line segment
 sub generatePoints {
@@ -180,3 +142,11 @@ sub generatePoints {
 }
 
 
+sub verticalEh {
+	my ($start, $end) = @_;
+
+	my ($sx, $sy) = split /$posSeparator/, $start;
+	my ($ex, $ey) = split /$posSeparator/, $end;
+
+	return ($sx == $ex);
+}
