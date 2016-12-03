@@ -10,28 +10,20 @@ my (@s1, @s2, @s3);
 
 while (<>) {
 	chomp;
+	# capture side lengths
+	next unless (my (@s) = $_ =~ /\A\s*(\d+)\s+(\d+)\s+(\d+)\s*\z/);
 
-	if (my (@s) = $_ =~ /(\d+)\s+(\d+)\s+(\d+)/) {
-		my ($s1, $s2, $s3) = @s;
+	# add to arrays
+	push @$_, shift @s for (\@s1, \@s2, \@s3);
 
-		push @s1, $s1;
-		push @s2, $s2;
-		push @s3, $s3;
+}
 
-		if (scalar @s1 == 3) {
+my @a = (@s1, @s2, @s3);
 
-			for (\@s1, \@s2, \@s3) {
-
-				my ($t1, $t2, $t3) = sort { $a <=> $b } @$_;
-
-				if ($t1 + $t2 > $t3) {
-					$sum++;
-				}
-			}
-
-			@s1 = @s2 = @s3 = ();
-		}
-	}
+while (scalar @a) {
+	# check triangles 3 values at a time
+	my ($t1, $t2, $t3) = sort { $a <=> $b } splice(@a, 0, 3);
+	$sum++ if ($t1 + $t2 > $t3);
 }
 
 print "$sum\n";
