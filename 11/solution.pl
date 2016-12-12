@@ -46,6 +46,9 @@ sub process {
 
 		for (@stuff) {
 			s/(microchip|generator).*$/$1/;
+			s/\A(\w)\w+/$1/;
+			s/-compatible microchip/M/;
+			s/ generator/G/;
 		}
 
 		$floors[$f++] = { map {$_ => 1} @stuff };
@@ -53,7 +56,7 @@ sub process {
 	}
 
 
-	$floors[0]{'elevator'} = 1;
+	$floors[0]{'e'} = 1;
 
 	print Dumper(\@floors);
 
@@ -123,7 +126,7 @@ sub move {
 		$totalOps = 0;
 	} else {
 #		print "\r$totalOps/" , $currentOps + $totalOps, " seen states:", scalar @statesSeen ;
-		print "\r$totalOps/" , $currentOps + $totalOps, " seen states:", scalar keys %statesSeen ;
+		print "\r$totalOps - " , $currentOps, " seen states:", scalar keys %statesSeen ;
 	}
 
 	# have to take something and change floors
@@ -137,14 +140,14 @@ sub move {
 #	print "steps: $steps " . Dumper($state);
 
 	for my $floor (0 .. $#$state) {
-		$e = $floor if ($state->[$floor]{'elevator'});
+		$e = $floor if ($state->[$floor]{'e'});
 	}
 
 	for my $thing (keys %{$state->[$e]}) {
-		next if ($thing eq 'elevator');
+		next if ($thing eq 'e');
 
 		for my $otherThing (undef, keys %{$state->[$e]}) {
-			next if (defined $otherThing and ($thing eq $otherThing or $otherThing eq 'elevator'));
+			next if (defined $otherThing and ($thing eq $otherThing or $otherThing eq 'e'));
 
 			if (defined $otherThing) {
 				my $pairString = join('', sort($thing, $otherThing));
@@ -168,11 +171,12 @@ sub move {
 			for my $nextFloor (grep { defined } ($floorAbove, $floorBelow)) {
 
 				# copy this state
-				my $changedState = clone($state);
+#				my $changedState = clone($state);
+				my $changedState = $json->decode($serialized);
 
 				#print "moving $thing ";
 
-				$changedState->[$nextFloor]{'elevator'} = delete $changedState->[$e]{'elevator'};
+				$changedState->[$nextFloor]{'e'} = delete $changedState->[$e]{'e'};
 
 				if (defined $otherThing) {
 					delete $changedState->[$e]{$otherThing};
@@ -278,8 +282,8 @@ sub validStateEh {
 	for my $floor (@$state) {
 
 		# elevator on same floor as something else
-		if ($floor->{'elevator'}) {
-			return 0 unless (scalar grep { $_ ne 'elevator' } keys %$floor);
+		if ($floor->{'e'}) {
+			return 0 unless (scalar grep { $_ ne 'e' } keys %$floor);
 		}
 
 		my $gens = generatorsPlease([keys %$floor]);
@@ -301,7 +305,7 @@ sub validStateEh {
 sub generatorsPlease {
 	my ($things) = @_;
 
-	my @gens = map { s/ generator//r } grep {/generator/} @$things;
+	my @gens = map { s/G\z//r } grep {/G\z/} @$things;
 
 	return \@gens;
 }
@@ -309,7 +313,7 @@ sub generatorsPlease {
 sub microchipsPlease {
 	my ($things) = @_;
 
-	my @chips = map { s/-compatible microchip//r } grep {/-compatible microchip/} @$things;
+	my @chips = map { s/M\z//r } grep {/M\z/} @$things;
 
 	return \@chips;
 }
