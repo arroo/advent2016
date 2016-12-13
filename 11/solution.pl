@@ -4,8 +4,6 @@ use strict;
 use warnings;
 no warnings 'recursion';
 
-use Clone::Fast qw(clone);
-
 use JSON::XS;
 
 use Data::Dumper;
@@ -52,7 +50,6 @@ sub process {
 		}
 
 		$floors[$f++] = { map {$_ => 1} @stuff };
-		
 	}
 
 
@@ -60,13 +57,9 @@ sub process {
 
 	print Dumper(\@floors);
 
-	my $solution = $json->encode(createSolutionState(\@floors));
+	my $solution = serialize(createSolutionState(\@floors));
 
 	print Dumper($solution);
-
-#	print sameStateEh($solution, $solution), "\n";
-#	print sameStateEh($solution, \@floors), "\n";
-#	print sameStateEh(\@floors, \@floors), "\n";
 
 	my $result;
 
@@ -99,7 +92,7 @@ sub process {
 sub move {
 	my ($state, $steps, $solution) = @_;
 
-	my $serialized = $json->encode($state);
+	my $serialized = serialize($state);
 
 	if ($serialized eq $$solution) {
 #	if (sameStateEh($state, $solution)) {
@@ -107,8 +100,6 @@ sub move {
 		print "\n$steps\n";
 		exit 0;
 	}
-
-	
 
 	#print "on floor $e, move:" . Dumper($move) . Dumper($state);
 
@@ -172,7 +163,7 @@ sub move {
 
 				# copy this state
 #				my $changedState = clone($state);
-				my $changedState = $json->decode($serialized);
+				my $changedState = $json->decode($json->encode($state));
 
 				#print "moving $thing ";
 
@@ -202,7 +193,7 @@ sub move {
 #					}
 #				}
 
-				my $serializedState = $json->encode($changedState);
+				my $serializedState = serialize($changedState);
 
 				next if ($statesSeen{$serializedState});
 
@@ -300,6 +291,45 @@ sub validStateEh {
 	}
 
 	return 1;
+}
+
+# it doesn't matter which elements are in which order, encode them in the order they appear floorwise & alphabetically
+sub serialize {
+	my ($state) = @_;
+
+	my $genericState = $json->decode($json->encode($state));
+
+	my %mapping = qw( e 0 );
+
+	my $nextMapping = 1;
+
+	for my $floor (0 .. $#$genericState) {
+		for my $m (sort { $mapping{$a} <=> $mapping{$b} } keys %mapping) {
+			for my $thing (keys %{$genericState->[$floor]}) {
+
+				my $mappedThing = $thing;
+				$mappedThing =~ s/\A$m/$mapping{$m}/;
+
+				$genericState->[$floor]{$mappedThing} = delete $genericState->[$floor]{$thing};
+			}
+		}
+
+		for my $thing (sort grep { not defined $mapping{$_} } keys %{$genericState->[$floor]}) {
+			my $element = substr($thing, 0, 1);
+			$mapping{$element} = $nextMapping++;
+		}
+
+		for my $m (sort { $mapping{$a} <=> $mapping{$b} } keys %mapping) {
+			for my $thing (keys %{$genericState->[$floor]}) {
+				my $mappedThing = $thing;
+				$mappedThing =~ s/\A$m/$mapping{$m}/;
+
+				$genericState->[$floor]{$mappedThing} = delete $genericState->[$floor]{$thing};
+			}
+		}
+	}
+
+	return $json->encode($genericState);
 }
 
 sub generatorsPlease {
