@@ -6,7 +6,10 @@ no warnings 'recursion';
 
 use JSON::XS;
 
+use Algorithm::Permute qw (permute );
+
 use Data::Dumper;
+$Data::Dumper::Sortkeys = 1;
 
 my $totalSteps = 0;
 my $totalOps = 0;
@@ -38,6 +41,8 @@ sub process {
 	my @floors;
 	my $f=0;
 
+	my %elements;
+
 	for my $line (@$lines) {
 		my @stuff = split / an? /, $line;
 		shift @stuff;
@@ -47,11 +52,14 @@ sub process {
 			s/\A(\w)\w+/$1/;
 			s/-compatible microchip/M/;
 			s/ generator/G/;
+
+			$elements{uc substr($_, 0, 1)} = 1;
 		}
 
-		$floors[$f++] = { map {$_ => 1} @stuff };
+		$floors[$f++] = { map {uc $_ => 1} @stuff };
 	}
 
+	print Dumper(\%elements);
 
 	$floors[0]{'e'} = 1;
 
@@ -65,7 +73,9 @@ sub process {
 
 	my @ops;
 
-	push @ops, stateToSub(\@floors, 0, \$solution);
+	my @elementArray = keys %elements;
+
+	push @ops, stateToSub(\@floors, 0, \$solution, \@elementArray);
 
 
 	#$result = move($e, [-1, {}, 0], \@floors);
@@ -81,7 +91,6 @@ sub process {
 		next unless (defined $op);
 
 		push @ops, $op->();
-
 	}
 
 	return $result;
@@ -90,7 +99,7 @@ sub process {
 
 
 sub move {
-	my ($state, $steps, $solution) = @_;
+	my ($state, $steps, $solution, $elements) = @_;
 
 	my $serialized = serialize($state);
 
@@ -134,7 +143,9 @@ sub move {
 		$e = $floor if ($state->[$floor]{'e'});
 	}
 
+#			my $chips = microchipsPlease([keys %$floor]);
 	for my $thing (keys %{$state->[$e]}) {
+#	for my $thing (microchipsPlease([keys %{$state->[$e]}])) {
 		next if ($thing eq 'e');
 
 		for my $otherThing (undef, keys %{$state->[$e]}) {
@@ -151,13 +162,24 @@ sub move {
 			my $floorBelow = $e > 0 ? $e - 1 : undef;
 
 			if (defined $floorBelow) {
-				my $belowThings = 0;
-				for my $floor (0 .. $floorBelow) {
-					$belowThings += scalar keys %{$state->[$floor]};
-				}
 
-				$floorBelow = undef unless ($belowThings);
+				my $clearedFloors = lowestClearedFloors($state);
+
+				# don't move things to a cleared floor
+				if ($clearedFloors->{$floorBelow}) {
+					$floorBelow = undef;
+
+				# don't move more than one thing to the lowest not-cleared floor
+				} elsif (defined $otherThing and $clearedFloors->{$floorBelow - 1}) {
+					$floorBelow = undef;
+
+				# don't move microchips down alone
+				} elsif (not defined $otherThing and microchipEh($thing)) {
+					$floorBelow = undef;
+				}
 			}
+
+			# don't move more than one thing down to most-cleared floor
 
 			for my $nextFloor (grep { defined } ($floorAbove, $floorBelow)) {
 
@@ -183,32 +205,15 @@ sub move {
 
 				next unless (validStateEh($changedState));
 
-				my $seenBefore;
-
-#				for my $seenState (@statesSeen) {
-#					if (sameStateEh($changedState, $seenState)) {
-##					if (Compare($changedState, $seenState)) {
-#						$seenBefore = 1;
-#						last;
-#					}
-#				}
-
 				my $serializedState = serialize($changedState);
 
 				next if ($statesSeen{$serializedState});
 
-				$statesSeen{$serializedState} = 1;
-
-				next if ($seenBefore);
-
-#				unshift @statesSeen, $changedState;
+				for my $matchingState (@{allMatchingStatesPlease($serializedState, $json, $elements)}) {
+					$statesSeen{$matchingState} = 1;
+				}
 
 				push @ops, $changedState;
-				#my $stepCount = move($nextFloor, \@newMove, $changedState);
-				#if (defined $stepCount and $stepCount < $furtherSteps) {
-				#	$furtherSteps = $stepCount;
-				#
-				#}
 			}
 		}
 	}
@@ -220,15 +225,15 @@ sub move {
 }
 
 sub stateToSub {
-	my ($state, $steps, $solution) = @_;
+	my ($state, $steps, $solution, $elements) = @_;
 
 	return sub {
 		my @out;
 
-		for my $newState (move($state, $steps, $solution)) {
+		for my $newState (move($state, $steps, $solution, $elements)) {
 			#print "Adding state to ops: " . Dumper($op);
 
-			push @out, stateToSub($newState, $steps + 1, $solution);
+			push @out, stateToSub($newState, $steps + 1, $solution, $elements);
 		}
 
 		return @out;
@@ -335,17 +340,29 @@ sub serialize {
 sub generatorsPlease {
 	my ($things) = @_;
 
-	my @gens = map { s/G\z//r } grep {/G\z/} @$things;
+	my @gens = map { s/G\z//r } grep { generatorEh($_) } @$things;
 
 	return \@gens;
+}
+
+sub generatorEh {
+	my ($thing) = @_;
+
+	return $thing =~ m/G\z/;
 }
 
 sub microchipsPlease {
 	my ($things) = @_;
 
-	my @chips = map { s/M\z//r } grep {/M\z/} @$things;
+	my @chips = map { s/M\z//r } grep { microchipEh($_) } @$things;
 
 	return \@chips;
+}
+
+sub microchipEh {
+	my ($thing) = @_;
+
+	return $thing =~ m/M\z/;
 }
 
 sub sameStateEh {
@@ -365,6 +382,60 @@ sub sameStateEh {
 		}
 	}
 	return 1;
+}
+
+sub lowestClearedFloors {
+	my ($state) = @_;
+
+	my %emptyFloors;
+
+	for my $floor (0 .. $#$state) {
+		if (scalar keys %{$state->[$floor]}) {
+			last;
+		}
+
+		$emptyFloors{$floor} = 1;
+	}
+
+	return \%emptyFloors;
+}
+
+sub allMatchingStatesPlease {
+	my ($serializedState, $json, $elements) = @_;
+
+	my @states;# = ($baseState);
+
+	# generate all permutations of elements because all matching states are the same
+#	my $p = Algorithm::Permute($elements);
+#
+#	while (my @res = $p->next) {
+#		my %matches = 
+#	}
+
+#	print Dumper($elements);
+
+	my @elementsBackup = @$elements;
+
+	# elevator base mapping
+	my %mapping;# = qw( e e );
+
+	permute {
+
+		for my $i ( 0 .. $#elementsBackup) {
+			$mapping{$elements->[$i]} = $elementsBackup[$i];
+		}
+
+		my $state = $serializedState;
+
+		for my $baseElement (keys %mapping) {
+			$state =~ s/$baseElement(\w)/$mapping{$baseElement}$1/g;
+		}
+
+#		push @states, $json->encode($state);	
+		push @states, $state;
+	} @elementsBackup;
+
+	return \@states;
 }
 
 main();
