@@ -67,7 +67,7 @@ sub process {
 
 	my @ops;
 
-	push @ops, makeMove(0, $target, $startState);
+	push @ops, makeMove(0, $target, $startState, 'start');
 
 	while (scalar @ops) {
 		my $op = shift @ops;
@@ -80,13 +80,13 @@ sub process {
 }
 
 sub makeMove {
-	my ($steps, $target, $state) = @_;
+	my ($steps, $target, $state, $moves) = @_;
 
 	return sub {
 
 		my @out;
 
-		for my $op (move($steps, $target, $state)) {
+		for my $op (move($steps, $target, $state, $moves)) {
 			push @out, makeMove(@$op);
 		}
 
@@ -94,10 +94,18 @@ sub makeMove {
 	};
 }
 
+my $maxSteps = 0;
+
 sub move {
-	my ($steps, $target, $stateString) = @_;
+	my ($steps, $target, $stateString, $moves) = @_;
+
+	if ($steps > $maxSteps) {
+		print "so far $steps\n";
+		$maxSteps = $steps;
+	}
 
 	if ($target eq '0:0') {
+#		print "$moves\n";
 		print "$steps\n";
 		exit 0;
 	}
@@ -112,6 +120,22 @@ sub move {
 		for my $receiver (@{$pairs->{$sender}}) {
 			my $newState = decode_json($stateString);
 
+			my ($newTarget, $newMove);
+
+			# check if data has moved
+			if ($sender ne $target) {
+				$newTarget = $target;
+
+#				$newMove = "$sender($newState->{$sender}[USED]) to $receiver($newState->{$receiver}[AVAIL])";
+
+			} else {
+				$newTarget = $receiver;
+
+#				$newMove = "$sender($newState->{$sender}[USED]) to $receiver\[$newState->{$receiver}[AVAIL]\]";
+			}
+
+#			print "step:$steps:  moving $newMove\n";
+
 			# move data
 			$newState->{$receiver}[USED]  += $newState->{$sender}[USED];
 			$newState->{$receiver}[AVAIL] -= $newState->{$sender}[USED];
@@ -119,12 +143,7 @@ sub move {
 			$newState->{$sender}[AVAIL] += $newState->{$sender}[USED];
 			$newState->{$sender}[USED]   = 0;
 
-			# check if target data has moved
-			my $newTarget = $target;
-			if ($sender eq $target) {
-				$newTarget = $receiver;
-			}
-
+#			push @ops, [$steps + 1, $newTarget, encode_json($newState), $moves . " -> $newMove"];
 			push @ops, [$steps + 1, $newTarget, encode_json($newState)];
 		}
 	}
@@ -144,17 +163,22 @@ sub generatePairs {
 
 		next if ($aUsed == 0);
 
-		for my $bNode (keys %$nodes) {
+		my ($aX, $aY) = split $sepReg, $node;
 
-			next if ($node eq $bNode);
 
-#			my ($bSize, $bUsed, $bAvail, $bPercent) = @{$nodes->{$bNode}};
-			my $bAvail = $nodes->{$bNode}[AVAIL];
+		for my $pos ([$aX-1, $aY], [$aX+1, $aY], [$aX, $aY-1], [$aX, $aY+1], ) {
 
-			next if ($aUsed > $bAvail);
+				my $bNode = join($separator, @$pos);
 
-			push @{$pairs{$node}}, $bNode;
-		}
+				next if ($node eq $bNode or not defined $nodes->{$bNode});
+
+#				my ($bSize, $bUsed, $bAvail, $bPercent) = @{$nodes->{$bNode}};
+				my $bAvail = $nodes->{$bNode}[AVAIL];
+
+				next if ($aUsed > $bAvail);
+
+				push @{$pairs{$node}}, $bNode;
+			}
 	}
 
 	return \%pairs;
