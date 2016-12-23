@@ -1,0 +1,82 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Data::Dumper;
+$Data::Dumper::Sortkeys = 1;
+
+use JSON::XS qw(encode_json decode_json);
+
+$| = 1;
+
+my $separator = ':';
+my $sepReg = qr/$separator/;
+
+sub main {
+	my $lines = slurp();
+
+	my $result = process($lines);
+
+	print "$result\n";
+}
+
+sub process {
+	my ($lines) = @_;
+
+
+
+	for my $line (@$lines) {
+
+		my ($x, $y, $size, $sizeUnits, $used, $usedUnits, $avail, $availUnits, $percent) = $line =~ /\A\/dev\/grid\/node-x(\d+)-y(\d+)\s+(\d+)(\S)\s+(\d+)(\S)\s+(\d+)(\S)\s+(\d+)%\z/;
+
+
+	}
+
+
+
+	my @ops;
+
+	push @ops, bfs();
+
+	while (scalar @ops) {
+		my $op = shift @ops;
+
+		next unless defined $op;
+
+		push @ops, $op->();
+	}
+
+}
+
+
+
+sub bfs {
+	my ($fn, $staticArgs) = @_;
+
+	return sub {
+
+		my ($dynamicArgs) = @_;
+
+		my @out;
+
+		for my $op ($fn->(@$staticArgs, @$dynamicArgs)) {
+			push @out, bfs($fn, $op);
+		}
+
+		return @out;
+	};
+}
+
+sub slurp {
+	my @lines;
+
+	while (<>) {
+		chomp;
+		push @lines, $_;
+	}
+
+	return \@lines;
+}
+
+main();
